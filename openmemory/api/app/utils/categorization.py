@@ -19,19 +19,29 @@ class MemoryCategories(BaseModel):
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=15))
 def get_categories_for_memory(memory: str) -> List[str]:
-    """Get categories for a memory."""
     try:
-        response = openai_client.responses.parse(
+        messages = [
+            {"role": "system", "content": MEMORY_CATEGORIZATION_PROMPT},
+            {"role": "user", "content": memory}
+        ]
+
+        response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
-            instructions=MEMORY_CATEGORIZATION_PROMPT,
-            input=memory,
-            temperature=0,
-            text_format=MemoryCategories,
+            messages=messages,
+            temperature=0
         )
-        response_json =json.loads(response.output[0].content[0].text)
+
+        content = response.choices[0].message.content
+        response_json = json.loads(content)
         categories = response_json['categories']
         categories = [cat.strip().lower() for cat in categories]
-        # TODO: Validate categories later may be
+
         return categories
+
     except Exception as e:
-        raise e
+        print(f"[ERROR] Failed to get categories: {e}")
+        try:
+            print(f"[DEBUG] Raw response: {content}")
+        except Exception as debug_e:
+            print(f"[DEBUG] Could not extract raw response: {debug_e}")
+        raise
